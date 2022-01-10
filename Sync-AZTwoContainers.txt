@@ -1,0 +1,149 @@
+﻿function Sync-AzTwoContainers
+    {
+        
+        param (
+            [Parameter(Mandatory)]
+            [string]$storageAccount1,
+            
+            [Parameter(Mandatory)]
+            [string]$storageAccount2,
+
+            [Parameter(Mandatory)]
+            [string]$sa1ContainerName,
+            [Parameter(Mandatory)]
+            [string]$sa2ContainerName,
+
+            [Parameter(Mandatory)]
+            [string]$sa1ContainerSAS,
+            [Parameter(Mandatory)]
+            [string]$sa2ContainerSAS
+        )
+
+        $logString = "Starting at"  + (Get-Date) + "`n"
+    
+        #Remember to add ? before SAS token to give permissions
+        $sa1ContainerSAS = "?" + $sa1ContainerSAS
+        $sa2ContainerSAS = "?" + $sa2ContainerSAS
+
+        $sa1ContainerContext = New-AzStorageContext -StorageAccountName $storageAccount1 -SasToken $sa1ContainerSAS
+        $sa2ContainerContext = New-AzStorageContext -StorageAccountName $storageAccount2 -SasToken $sa2ContainerSAS
+
+        $sa1ContainerContent = Get-AzStorageBlob -Container $sa1ContainerName -Context $sa1ContainerContext
+        $sa2ContainerContent = Get-AzStorageBlob -Container $sa2ContainerName -Context $sa2ContainerContext
+
+        $syncfrom1to2 =[System.Collections.ArrayList]::new()
+        $syncfrom2to1 =[System.Collections.ArrayList]::new()
+
+        $pathtmp = (Get-Item env:\temp).value + "\lastsynceurope.txt"
+
+        $logString = $logString + "               " + "`n"
+        $logString = $logString + "===================================================" + "`n"
+        $logString = $logString + "Storage Account 1: " + $storageAccount1 + "`n"
+        $logString = $logString + "Container 1: " + $sa1ContainerName + "`n"
+        $logString = $logString + "===================================================" + "`n"
+        $logString = $logString + "               " + "`n"
+
+        $logString = $logString + "               " + "`n"
+        $logString = $logString + "===================================================" + "`n"
+        $logString = $logString + "Storage Account 2: " + $storageAccount2 + "`n"
+        $logString = $logString + "Container 2: " + $sa2ContainerName + "`n"
+        $logString = $logString + "===================================================" + "`n"
+        $logString = $logString + "               " + "`n"
+
+
+        foreach ($con1file in $sa1ContainerContent) {
+            $flag = $true
+    
+            foreach ($con2file in $sa2ContainerContent) {
+                if ($con2file.Name.Equals($con1file.Name.ToString())){
+
+                    if ($con1file.LastModified -lt $con2file.LastModified){
+                        $flag = $false
+                        break 
+                    }
+                }
+            }
+
+            if($flag -eq $true) {
+                $syncfrom1to2.Add($con1file) | Out-Null
+            }
+        }
+
+        foreach ($con2file in $sa2ContainerContent) {
+            $flag = $true
+    
+            foreach ($con1file in $sa1ContainerContent) {
+                if ($con1file.Name.Equals($con2file.Name.ToString())){
+
+                    if ($con1file.LastModified -lt $con1file.LastModified){
+                        $flag = $false
+                        break 
+                    }
+                }
+            }
+
+            if($flag -eq $true) {
+                $syncfrom2to1.Add($con2file) | Out-Null
+            }
+        }
+
+        $logString = $logString + "               " + "`n"
+        $logString = $logString + "===================================================" + "`n"
+        $logString = $logString + "The files that will be copied from " + $sa1ContainerName + " to " + $sa2ContainerName + "`n"
+        $syncfrom1to2 | ForEach-Object { $logString = $logString + $_.Name  + "`n"}
+        $logString = $logString + "               " + "`n"
+        $logString = $logString + "The files that will be copied from " + $sa2ContainerName + " to " + $sa1ContainerName + "`n"
+        $syncfrom2to1 | ForEach-Object { $logString = $logString + $_.Name  + "`n"}
+        $logString = $logString + "===================================================" + "`n"
+        $logString = $logString + "               " + "`n"
+ 
+        $logString = $logString + "               " + "`n"
+        $logString = $logString + "===================================================" + "`n"
+
+        $logString = $logString + "From " + $sa1ContainerName + " to " + $sa2ContainerName + "`n"
+        foreach ($file1to2 in $syncfrom1to2)
+            {
+                $logString = $logString + "Copying "  + $file1to2.Name + "`n"
+                Start-AzStorageBlobCopy -SrcBlob $file1to2.Name -SrcContainer $sa1ContainerName -Context $sa1ContainerContext -DestContainer $sa2ContainerName -DestContext $sa2ContainerContext -Force | Out-Null
+                if($?)
+                    {
+                        $logString = $logString + "success!!!" + "`n"
+                    }
+                else
+                    {
+                        #"command failed"
+                        $logString = $logString + $Error[0].Exception.Message + "`n"
+                    }
+            }
+
+        $logString = $logString + "          " + "`n"
+        $logString = $logString + "##########Going the other way round!!!##########" + "`n"
+        $logString = $logString + "          " + "`n"
+
+        $logString = $logString + "From " + $sa2ContainerName + " to " + $sa1ContainerName + "`n"
+        foreach ($file2to1 in $syncfrom2to1)
+            {
+                $logString = $logString + "Copying " + $file2to1.Name  + "`n"
+                Start-AzStorageBlobCopy -SrcBlob $file2to1.Name -SrcContainer $sa2ContainerName -Context $sa2ContainerContext -DestContainer $sa1ContainerName -DestContext $sa1ContainerContext -Force | Out-Null
+                if($?)
+                    {
+                        $logString = $logString + "success!!!" + "`n"
+                    }
+                else
+                    {
+                        #"command failed"
+                        $logString = $logString + $Error[0].Exception.Message + "`n"
+                    }
+            }
+        $logString = $logString + "===================================================" + "`n"
+        $logString = $logString + "               " + "`n"
+        $logString = $logString + "Finished at" + (Get-Date) + "`n"
+
+
+        $logString = $logString + "               " + "`n"
+        $logString = $logString + "===================================================" + "`n"
+
+        New-Item -Name lastsync.txt -Path (get-item env:\temp).value -Value $logString -Force | Out-Null
+        Set-AzStorageBlobContent -Container $sa1ContainerName -File ((get-item env:\temp).value + "\lastsync.txt") -Blob "lastsync.txt" -Context $sa1ContainerContext -Force | Out-Null
+        Set-AzStorageBlobContent -Container $sa2ContainerName -File ((get-item env:\temp).value + "\lastsync.txt") -Blob "lastsync.txt" -Context $sa2ContainerContext -Force | Out-Null
+    }
