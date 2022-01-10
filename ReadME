@@ -1,0 +1,14 @@
+HOW TO USE:
+
+Sync-AZTwoContainers: 
+1.	Save the attached script in a folder and note the path.
+2.	Go to the location in Windows explorer and enable extension view to see the extension of the file
+3.	Change the extension to “.ps1” from “.txt”
+4.	Open PowerShell windows (non admin)
+5.	Navigate to the location of the file in the PowerShell window.
+6.	Execute the following command “.\Sync-AZTwoContainers.ps1”, this will allow you to call this function with just the name.
+7.	Next we actually use the command by executing its name on powershell, “Sync-AZTwoContainers”
+a.	The command comes with command line options to give both storage account names, container that needs to be synced in those storage accounts and their SAS tokens.
+b.	These values are mandatory and have no defaults.
+c.	These details are obtained from Storage account’s container page on Azure portal (the SAS is for container not Storage account)
+d.	The script also generates log stored in %temp% and in both the containers by the name “lastsync.txt”
