@@ -1,0 +1,63 @@
+Clear-Host
+
+$tenentid = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+$rgforalerts = "xxxxxxxxxxxxxx"
+$alertactiongp = "xxxxxxxxxxxxxx"
+
+$logfl = (Get-Item Env:\TEMP).value.tostring() + "\networkalerts-" + ((Get-Date)).tostring("yyyy-mm-dd-hh-mm-ss") + ".txt"
+New-Item -Path (Get-Item Env:\TEMP).value.tostring() -Name ("\networkalerts-" + ((Get-Date)).tostring("yyyy-mm-dd-hh-mm-ss") + ".txt").ToString() -ItemType "file" -Value ("Starting log at: " + ((Get-Date)).tostring()).ToString()
+
+Connect-AzAccount
+
+$windowsize = New-TimeSpan -Minutes 5
+$frequencysize = New-TimeSpan -Minutes 1
+$criteriaNetin = New-AzMetricAlertRuleV2Criteria -MetricName "Network In Total" -TimeAggregation Total -Operator GreaterThan -Threshold 500000000000
+$criteriaNetout = New-AzMetricAlertRuleV2Criteria -MetricName "Network Out Total" -TimeAggregation Total -Operator GreaterThan -Threshold 200000000000
+
+Set-AzContext -Tenant $tenentid
+$Subscriptions = Get-AzSubscription -TenantId $tenentid
+
+ForEach ($Subscription in $Subscriptions) {
+     
+     Set-AzContext -Tenant $tenentid -Subscription $Subscription.Name
+
+     $RGs = Get-AzResourceGroup
+     foreach ($RG in $RGs) {
+ 
+         $VMs = Get-AzVM -ResourceGroupName $RG.ResourceGroupName
+         foreach ($VM in $VMs) {
+
+            $targetresourceid = (Get-AzVM -ResourceGroupName $RG.ResourceGroupName -Name $VM.Name).Id
+            $actiongroup = (Get-AzActionGroup -ResourceGroupName $rgforalerts -Name $alertactiongp).id
+            
+            $metricnamein = "NetworkIn-metricalert-" +  $VM.name 
+            $metricnameout = "NetworkOut-metricalert-" +  $VM.name 
+
+            "              " | Out-File -FilePath $logfl -Append
+            "##############" | Out-File -FilePath $logfl -Append
+            $statmnt = ">>>>Working with alert: " + $metricname + " on VM: " + $VM.Name + " under RG: " + $RG.ResourceGroupName + " and Subscription: " + $Subscription.Name
+            $statmnt | Out-File -FilePath $logfl -Append
+            Write-Host $statmnt 
+
+            if (-not (Get-AzMetricAlertRuleV2 -Name $metricnamein -ResourceGroupName $rgforalerts -ErrorAction SilentlyContinue)) {
+                $output1 = Add-AzMetricAlertRuleV2 -Name $metricnamein -ResourceGroupName $rgforalerts -WindowSize $windowsize -Frequency $frequencysize -TargetResourceId $targetresourceid -Condition $criteriaNetin  -Severity 3 -ActionGroupId $actiongroup -ErrorAction Continue 
+                $output1 | Out-File -FilePath $logfl -Append
+                Write-Host $output1
+            }
+            else{
+                "Metric by the name: " + $metricnamein + ", is already present!!!" | Out-File -FilePath $logfl -Append
+                #Write-Host "Metric by the name: " $metricnamein ", is already present!!!"
+            }
+
+            if (-not (Get-AzMetricAlertRuleV2 -Name $metricnameout -ResourceGroupName $rgforalerts -ErrorAction SilentlyContinue)) {
+                $output2 = Add-AzMetricAlertRuleV2 -Name $metricnameout -ResourceGroupName $rgforalerts -WindowSize $windowsize -Frequency $frequencysize -TargetResourceId $targetresourceid -Condition $criteriaNetout  -Severity 3 -ActionGroupId $actiongroup -ErrorAction Continue
+                $output2 | Out-File -FilePath $logfl -Append
+                Write-Host $output2
+            }
+            else{
+                "Metric by the name: " + $metricnameout + ", is already present!!!" | Out-File -FilePath $logfl -Append
+                #Write-Host "Metric by the name: " $metricnameout ", is already present!!!"
+            }
+          }
+     }
+ }
