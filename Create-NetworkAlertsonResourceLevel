@@ -1,3 +1,4 @@
+#List of alerts: https://docs.microsoft.com/en-us/azure/azure-monitor/essentials/metrics-supported #
 Clear-Host
 
 $tenentid = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
