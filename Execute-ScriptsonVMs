@@ -1,0 +1,62 @@
+Clear-Host
+$subs = @("subscrption1", "subscrption2")
+$subscrption1_vm = @("VM1", "VM2", "VM3", "VM4", "VM5")
+$subscrption2_vm = @("VM1", "VM2", "VM3", "VM4", "VM5")
+$bashpath = "C:\temp\getdetails.bash"
+$powershellpath = "C:\temp\getdetails.ps1"
+$logfile = "C:\temp\idquery.txt"
+
+New-Item -Path C:\temp -Name idquery.txt -ItemType File -Force 
+"Starting at $(get-date)" | Out-File -FilePath $logfile -Append
+">>>>Scripts will only be run on Virtual machines and other appliances will be ignored<<<<" | Out-File -FilePath $logfile -Append
+
+foreach ($sub in $subs) {
+    "###################################################" | Out-File -FilePath $logfile -Append
+    
+    Set-AzContext -Tenant <<<<TENENT ID>>>> -Subscription $sub | Out-File -FilePath $logfile -Append
+
+    "Selecting subscription: $(Get-AzContext | Select-Object -Property Name)"  | Out-File -FilePath $logfile -Append
+
+    $reshash = @{}
+    $resourcelist = ""
+    
+    if ($sub.ToString().Contains("shg-joomla-non-prod")) 
+        { $resourcelist = $joomla_non_prod_vm }
+    else { $resourcelist = $joomla_prod_vm }
+
+    foreach ($resrs in $resourcelist) {
+        $tmpres = Get-AzResource -Name $resrs | Select-Object Name, ResourceType
+        $reshash[$tmpres.Name.ToString()] = $tmpres.ResourceType.ToString()
+
+        "¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤" | Out-File -FilePath $logfile -Append
+
+         if ($tmpres.ResourceType -eq "Microsoft.Compute/virtualMachines") {
+                $tmpvmstatus = Get-AzVM -Name $tmpres.Name -Status
+                $tmpvmdesc = Get-AzVM -Name $tmpres.Name  | Select-Object -Property Name, Id, ResourceGroupName, @{label='OSType'; expression={$_.StorageProfile.OSDisk.OSType}}
+                
+                "The VM: $($tmpres.Name) is $($tmpvmstatus.PowerState) and has $($tmpvmdesc.OSType) OS"
+                "The VM: $($tmpres.Name) is $($tmpvmstatus.PowerState) and has $($tmpvmdesc.OSType) OS" | Out-File -FilePath $logfile -Append
+
+                if(($tmpvmstatus.PowerState -eq "VM running") -and ($tmpvmdes.OSType -eq "Linux")){
+                    "Running bash script from $($bashpath)" | Out-File -FilePath $logfile -Append
+
+                    #Invoke-AzVMRunCommand -ResourceGroupName $tmpvmdes.ResourceGroupName -Name $tmpvmdes.Name -CommandId 'RunShellScript' -ScriptPath $bashpath
+                    $vmrun = Invoke-AzVMRunCommand -ResourceId $tmpvmdesc.Id -CommandId 'RunShellScript' -ScriptPath $bashpath
+                    $vmrun.Value[0].Message | Out-File -FilePath $logfile -Append
+
+                }
+                elseif(($tmpvmstatus.PowerState -eq "VM running") -and ($tmpvmdes.OSType -eq "Windows")){
+                    "Running powershell script from $($powershellpath)" | Out-File -FilePath $logfile -Append
+                    #Invoke-AzVMRunCommand -ResourceGroupName $tmpvmdes.ResourceGroupName -Name $tmpvmdes.Name -CommandId 'RunPowerShellScript' -ScriptPath $powershellpath  | Out-File -FilePath $logfile -Append
+                }
+                else{
+                    "Not running the script as the VM is either off or of different OS than windows and linux" | Out-File -FilePath $logfile -Append
+                }
+            }
+         else {
+            "The appliance $($tmpres.Name) is Not a VM but a $($tmpres.ResourceType), so it will not be processed!" | Out-File -FilePath $logfile -Append
+         }
+         "                                    " | Out-File -FilePath $logfile -Append
+    }
+    $reshash | ft
+}
