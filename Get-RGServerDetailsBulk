@@ -1,0 +1,20 @@
+$rgname = "RG-Name"
+$dcvpvms = Get-AzVM -ResourceGroupName $rgname
+$csvfile = New-Item -Path C:\temp\Projects -Name Requirements.csv -ItemType File -Force
+
+"Resource Group, VM Name, OS Name, Memory, CPU Cores, Size, OS DiskSize, Data Disk Size (cloud disk), IP address" | Out-File -FilePath $csvfile.FullName -Append
+
+foreach($dcvpvm in $dcvpvms) {
+
+ $osdisk = ((get-azvm -ResourceGroupName $rgname -Name $dcvpvm.Name).StorageProfile).OSDisk.DiskSizeGB
+ $datadisk = ((get-azvm -ResourceGroupName $rgname -Name $dcvpvm.Name).StorageProfile).DataDisks.DiskSizeGB
+ $vmsize = (((get-azvm -ResourceGroupName $rgname -Name $dcvpvm.Name).HardwareProfile).VmSize)
+
+ $vmmemory = (Get-AzVMSize -ResourceGroupName $rgname -VMName $dcvpvm.Name | where {$_.Name -eq $vmsize}).MemoryInMB
+ $vmcpu = (Get-AzVMSize -ResourceGroupName $rgname -VMName $dcvpvm.Name | where {$_.Name -eq $vmsize}).NumberOfCores
+ 
+ $vmip =(Get-AzNetworkInterface -Name (((Get-AzVM -ResourceGroupName $rgname -Name $dcvpvm.name ).NetworkProfile.NetworkInterfaces)[0].Id.Split("/")[-1]) -ResourceGroupName $dcvpvm.ResourceGroupName).IpConfigurations.PrivateIpAddress
+
+ "$($dcvpvm.ResourceGroupName),$($dcvpvm.Name),$($dcvpvm.StorageProfile.ImageReference.Sku), $vmmemory, $vmcpu, $vmsize, $osdisk, $datadisk, $vmip)"  | Out-File -FilePath $csvfile.FullName -Append
+ Write-Host "$($dcvpvm.ResourceGroupName),$($dcvpvm.Name),$($dcvpvm.StorageProfile.ImageReference.Sku), $vmmemory, $vmcpu, $vmsize, $osdisk, $datadisk, $vmip)"
+}
